@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rainbow Egg</title>
+<style>
+  :root {
+    --void: #0b0620;
+    --indigo: #1d0f4a;
+    --violet: #6a2cff;
+    --magenta: #c43cff;
+    --pink: #ff5fd2;
+    --cyan: #5fd8ff;
+    --ice: #a8e8ff;
+    --silver: #f4f0ff;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: var(--void);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--silver);
+  }
+  canvas { display: block; width: 100vw; height: 100vh; touch-action: manipulation; cursor: pointer; }
+  #hint {
+    position: fixed; left: 0; right: 0; bottom: 8vh; text-align: center;
+    font-size: clamp(14px, 3.5vw, 20px); letter-spacing: .2em; text-transform: uppercase;
+    text-shadow: 0 0 12px var(--magenta), 0 0 24px var(--violet);
+    animation: pulse 2s ease-in-out infinite; pointer-events: none;
+  }
+  #again {
+    position: fixed; left: 50%; bottom: 7vh; transform: translateX(-50%);
+    padding: 12px 28px; border-radius: 999px; border: 1px solid var(--ice);
+    background: rgba(106, 44, 255, .25); color: var(--silver);
+    font: inherit; font-size: 16px; letter-spacing: .15em; text-transform: uppercase;
+    box-shadow: 0 0 20px var(--magenta), inset 0 0 12px var(--cyan);
+    cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .6s;
+  }
+  #again.show { opacity: 1; pointer-events: auto; }
+  @keyframes pulse { 50% { opacity: .45; } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hint">Tap the egg to hatch</div>
+<button id="again">Hatch again</button>
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const hint = document.getElementById('hint');
+  const again = document.getElementById('again');
+
+  // Colours from the Ultra Instinct background: violet / magenta / pink energy,
+  // cyan-ice crystals and silver-white light.
+  const PALETTE = ['#6a2cff', '#c43cff', '#ff5fd2', '#5fd8ff', '#a8e8ff', '#f4f0ff'];
+  const AURA = ['#6a2cff', '#9b3cff', '#c43cff', '#5fd8ff'];
+
+  let W, H, DPR, cx, cy, R;
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = W * DPR; canvas.height = H * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    cx = W / 2; cy = H * 0.48;
+    R = Math.min(W, H) * 0.16;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const pick = arr => arr[(Math.random() * arr.length) | 0];
+
+  // ---------- background: nebula blobs, stars, floating crystals ----------
+  const stars = Array.from({ length: 160 }, () => ({
+    x: Math.random(), y: Math.random(), r: rand(.3, 1.6), t: rand(0, 6.28), s: rand(.5, 2)
+  }));
+
+  function makeCrystal(burst) {
+    return {
+      x: burst ? cx : rand(0, W), y: burst ? cy : rand(0, H),
+      vx: burst ? rand(-9, 9) : rand(-.15, .15), vy: burst ? rand(-9, 6) : rand(-.2, .05),
+      size: burst ? rand(10, 34) : rand(14, 42),
+      rot: rand(0, 6.28), vr: rand(-.02, .02),
+      shape: Array.from({ length: 5 }, () => rand(.6, 1)),
+      burst
+    };
+  }
+  let crystals = Array.from({ length: 9 }, () => makeCrystal(false));
+
+  function drawBackground(t, energy) {
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * .8);
+    g.addColorStop(0, `rgba(196,60,255,${.35 + energy * .4})`);
+    g.addColorStop(.3, 'rgba(106,44,255,.35)');
+    g.addColorStop(.6, 'rgba(29,15,74,.9)');
+    g.addColorStop(1, '#0b0620');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    // drifting nebula clouds
+    ctx.globalCompositeOperation = 'lighter';
+    const blobs = [
+      ['95,216,255', .2, .3], ['255,95,210', .8, .25], ['106,44,255', .15, .8],
+      ['196,60,255', .85, .75], ['95,216,255', .5, .1]
+    ];
+    blobs.forEach(([c, bx, by], i) => {
+      const x = W * bx + Math.sin(t * .0003 + i) * 60;
+      const y = H * by + Math.cos(t * .00025 + i * 2) * 50;
+      const r = Math.max(W, H) * .35;
+      const bg = ctx.createRadialGradient(x, y, 0, x, y, r);
+      bg.addColorStop(0, `rgba(${c},${.18 + energy * .15})`);
+      bg.addColorStop(1, `rgba(${c},0)`);
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    });
+
+    stars.forEach(s => {
+      const a = .4 + .6 * Math.abs(Math.sin(t * .001 * s.s + s.t));
+      ctx.fillStyle = `rgba(244,240,255,${a})`;
+      ctx.beginPath(); ctx.arc(s.x * W, s.y * H, s.r, 0, 6.28); ctx.fill();
+    });
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  function drawCrystal(c) {
+    ctx.save();
+    ctx.translate(c.x, c.y); ctx.rotate(c.rot);
+    const s = c.size;
+    const pts = [[0, -s * 1.3 * c.shape[0]], [s * .55 * c.shape[1], -s * .2], [s * .4 * c.shape[2], s * .9],
+                 [-s * .45 * c.shape[3], s * .8], [-s * .6 * c.shape[4], -s * .3]];
+    const g = ctx.createLinearGradient(-s, -s, s, s);
+    g.addColorStop(0, '#f4f0ff'); g.addColorStop(.35, '#a8e8ff');
+    g.addColorStop(.7, '#5fd8ff'); g.addColorStop(1, '#3a2c9a');
+    ctx.shadowColor = '#5fd8ff'; ctx.shadowBlur = 18;
+    ctx.fillStyle = g; ctx.globalAlpha = .85;
+    ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); ctx.fill();
+    // facet highlight
+    ctx.shadowBlur = 0; ctx.globalAlpha = .5; ctx.strokeStyle = '#f4f0ff'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); ctx.lineTo(0, s * .15); ctx.lineTo(pts[2][0], pts[2][1]);
+    ctx.moveTo(0, s * .15); ctx.lineTo(pts[4][0], pts[4][1]); ctx.stroke();
+    ctx.restore();
+  }
+
+  function updateCrystals() {
+    crystals.forEach(c => {
+      c.x += c.vx; c.y += c.vy; c.rot += c.vr;
+      if (c.burst) { c.vx *= .96; c.vy *= .96; c.vy -= .02; c.vr *= .99; }
+      if (c.x < -60) c.x = W + 60; if (c.x > W + 60) c.x = -60;
+      if (c.y < -60) c.y = H + 60; if (c.y > H + 60) c.y = -60;
+    });
+  }
+
+  // ---------- particles: sparkles, energy streams, shell pieces ----------
+  let particles = [];
+  function sparkle(x, y, opts = {}) {
+    particles.push(Object.assign({
+      kind: 'spark', x, y, vx: rand(-1, 1), vy: rand(-1, 1), life: 1, decay: rand(.008, .02),
+      size: rand(1, 3.5), color: pick(PALETTE)
+    }, opts));
+  }
+
+  function drawStar4(x, y, r, color, a) {
+    ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = color;
+    ctx.shadowColor = color; ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.moveTo(x, y - r * 3); ctx.quadraticCurveTo(x, y, x + r * 3, y);
+    ctx.quadraticCurveTo(x, y, x, y + r * 3); ctx.quadraticCurveTo(x, y, x - r * 3, y);
+    ctx.quadraticCurveTo(x, y, x, y - r * 3); ctx.fill();
+    ctx.restore();
+  }
+
+  function updateParticles() {
+    ctx.globalCompositeOperation = 'lighter';
+    particles = particles.filter(p => {
+      p.life -= p.decay;
+      if (p.life <= 0) return false;
+      if (p.kind === 'stream') {
+        // energy pulled into the egg
+        const dx = cx - p.x, dy = cy - p.y, d = Math.hypot(dx, dy);
+        if (d < R * .5) return false;
+        p.vx += dx / d * .6; p.vy += dy / d * .6; p.vx *= .93; p.vy *= .93;
+      } else if (p.kind === 'shell') {
+        p.vy += .25; p.rot += p.vr;
+      } else if (p.kind === 'flame') {
+        p.vy -= .08; p.vx *= .97;
+      }
+      p.x += p.vx; p.y += p.vy;
+
+      if (p.kind === 'shell') {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.globalAlpha = Math.min(1, p.life * 2);
+        const g = ctx.createLinearGradient(-p.size, 0, p.size, 0);
+        g.addColorStop(0, p.color); g.addColorStop(1, '#f4f0ff');
+        ctx.fillStyle = g; ctx.shadowColor = p.color; ctx.shadowBlur = 10;
+        ctx.beginPath(); ctx.moveTo(-p.size, -p.size * .4); ctx.lineTo(p.size * .8, -p.size * .7);
+        ctx.lineTo(p.size, p.size * .5); ctx.lineTo(-p.size * .3, p.size * .6); ctx.closePath(); ctx.fill();
+        ctx.restore();
+        ctx.globalCompositeOperation = 'lighter';
+      } else if (p.kind === 'star') {
+        drawStar4(p.x, p.y, p.size, p.color, p.life);
+      } else {
+        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 3);
+        g.addColorStop(0, `rgba(244,240,255,${p.life})`);
+        g.addColorStop(.4, hexA(p.color, p.life * .8));
+        g.addColorStop(1, hexA(p.color, 0));
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size * 3, 0, 6.28); ctx.fill();
+      }
+      return true;
+    });
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  function hexA(hex, a) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${Math.max(0, a)})`;
+  }
+
+  // ---------- the egg ----------
+  function eggPath(x, y, r, squash = 1) {
+    ctx.beginPath();
+    const w = r * .82 * squash, h = r * 1.1 / squash;
+    ctx.moveTo(x, y - h);
+    ctx.bezierCurveTo(x + w * .6, y - h, x + w, y - h * .35, x + w, y + h * .2);
+    ctx.bezierCurveTo(x + w, y + h * .72, x + w * .55, y + h, x, y + h);
+    ctx.bezierCurveTo(x - w * .55, y + h, x - w, y + h * .72, x - w, y + h * .2);
+    ctx.bezierCurveTo(x - w, y - h * .35, x - w * .6, y - h, x, y - h);
+    ctx.closePath();
+  }
+
+  function drawAura(t, x, y, r, strength) {
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    // soft glow
+    const g = ctx.createRadialGradient(x, y, r * .3, x, y, r * (2.2 + strength));
+    g.addColorStop(0, `rgba(196,60,255,${.55 * strength + .2})`);
+    g.addColorStop(.4, `rgba(106,44,255,${.35 * strength + .1})`);
+    g.addColorStop(.7, `rgba(95,216,255,${.15 * strength})`);
+    g.addColorStop(1, 'rgba(95,216,255,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * (2.2 + strength), 0, 6.28); ctx.fill();
+    // flickering aura flames rising from the egg
+    const n = 22;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * 6.28;
+      const flick = Math.sin(t * .008 + i * 1.7) * .5 + .5;
+      const len = r * (.5 + flick * .6) * (0.6 + strength);
+      const bx = x + Math.cos(a) * r * .75, by = y + Math.sin(a) * r * .95;
+      const tipX = bx + Math.cos(a) * len * .4, tipY = by - len;
+      const fg = ctx.createLinearGradient(bx, by, tipX, tipY);
+      const col = AURA[i % AURA.length];
+      fg.addColorStop(0, hexA(col, .5 * (0.4 + strength)));
+      fg.addColorStop(1, hexA(col, 0));
+      ctx.fillStyle = fg;
+      ctx.beginPath();
+      ctx.moveTo(bx - r * .12, by);
+      ctx.quadraticCurveTo(bx + Math.sin(t * .01 + i) * 10, (by + tipY) / 2, tipX, tipY);
+      ctx.quadraticCurveTo(bx + Math.cos(t * .01 + i) * 10, (by + tipY) / 2, bx + r * .12, by);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawEgg(t, x, y, r, glow, cracks, squash) {
+    ctx.save();
+    ctx.shadowColor = '#c43cff'; ctx.shadowBlur = 40 + glow * 60;
+    eggPath(x, y, r, squash);
+    // shifting iridescent shell
+    const shift = t * .0004;
+    const g = ctx.createLinearGradient(x - r * Math.cos(shift), y - r * 1.2, x + r * Math.cos(shift), y + r * 1.2);
+    const cols = ['#5fd8ff', '#6a2cff', '#c43cff', '#ff5fd2', '#a8e8ff', '#6a2cff'];
+    cols.forEach((c, i) => {
+      g.addColorStop(((i / cols.length) + shift * .3) % 1, c);
+    });
+    ctx.fillStyle = g; ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    eggPath(x, y, r, squash); ctx.clip();
+    // swirling energy bands inside the shell
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 5; i++) {
+      const bandY = y - r + ((t * .05 + i * r * .5) % (r * 2.4));
+      const bg = ctx.createLinearGradient(x - r, bandY - 20, x + r, bandY + 20);
+      bg.addColorStop(0, 'rgba(95,216,255,0)');
+      bg.addColorStop(.5, hexA(PALETTE[i], .25));
+      bg.addColorStop(1, 'rgba(255,95,210,0)');
+      ctx.fillStyle = bg;
+      ctx.beginPath();
+      ctx.ellipse(x + Math.sin(t * .002 + i) * r * .2, bandY, r * 1.1, r * .12, Math.sin(t * .001 + i) * .4, 0, 6.28);
+      ctx.fill();
+    }
+    // inner light, grows as the egg charges up
+    const ig = ctx.createRadialGradient(x, y + r * .1, 0, x, y, r * 1.2);
+    ig.addColorStop(0, `rgba(244,240,255,${.25 + glow * .75})`);
+    ig.addColorStop(.5, `rgba(196,60,255,${glow * .4})`);
+    ig.addColorStop(1, 'rgba(106,44,255,0)');
+    ctx.fillStyle = ig; ctx.fillRect(x - r * 2, y - r * 2, r * 4, r * 4);
+    // glossy highlight
+    ctx.globalCompositeOperation = 'source-over';
+    const hg = ctx.createRadialGradient(x - r * .3, y - r * .5, 0, x - r * .3, y - r * .5, r * .6);
+    hg.addColorStop(0, 'rgba(244,240,255,.75)'); hg.addColorStop(1, 'rgba(244,240,255,0)');
+    ctx.fillStyle = hg; ctx.fillRect(x - r, y - r * 1.2, r * 1.4, r * 1.2);
+    ctx.restore();
+
+    // glowing cracks
+    if (cracks.length) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      cracks.forEach(cr => {
+        [[10, '#c43cff', .6], [5, '#5fd8ff', .8], [1.8, '#f4f0ff', 1]].forEach(([w, c, a]) => {
+          ctx.strokeStyle = hexA(c, a * cr.grow); ctx.lineWidth = w;
+          ctx.shadowColor = c; ctx.shadowBlur = 15;
+          ctx.beginPath();
+          const upto = Math.max(1, Math.ceil(cr.pts.length * cr.grow));
+          cr.pts.slice(0, upto).forEach(([px, py], i) => {
+            const X = x + px * r, Y = y + py * r;
+            i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y);
+          });
+          ctx.stroke();
+        });
+      });
+      ctx.restore();
+    }
+  }
+
+  function makeCrack() {
+    // a zig-zag starting on the shell edge, heading across the egg
+    const side = Math.random() < .5 ? -1 : 1;
+    let px = side * .7, py = rand(-.5, .4);
+    const pts = [[px, py]];
+    for (let i = 0; i < 7; i++) {
+      px -= side * rand(.1, .22); py += rand(-.2, .2);
+      pts.push([px, py]);
+    }
+    return { pts, grow: 0 };
+  }
+
+  // ---------- hatched form: a radiant silver-violet energy core ----------
+  function drawCore(t, x, y, r, a) {
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a;
+    // rotating light rays
+    for (let i = 0; i < 16; i++) {
+      const ang = i / 16 * 6.28 + t * .0004;
+      const len = r * (2.8 + Math.sin(t * .003 + i) * .6);
+      const rg = ctx.createLinearGradient(x, y, x + Math.cos(ang) * len, y + Math.sin(ang) * len);
+      const col = PALETTE[i % PALETTE.length];
+      rg.addColorStop(0, hexA(col, .6)); rg.addColorStop(1, hexA(col, 0));
+      ctx.fillStyle = rg;
+      ctx.beginPath(); ctx.moveTo(x, y);
+      ctx.lineTo(x + Math.cos(ang - .06) * len, y + Math.sin(ang - .06) * len);
+      ctx.lineTo(x + Math.cos(ang + .06) * len, y + Math.sin(ang + .06) * len);
+      ctx.fill();
+    }
+    // orbit rings
+    ctx.lineWidth = 2;
+    [[1.3, '#5fd8ff', 1], [1.6, '#ff5fd2', -1.3], [1.9, '#c43cff', .7]].forEach(([k, c, sp], i) => {
+      ctx.strokeStyle = hexA(c, .7); ctx.shadowColor = c; ctx.shadowBlur = 16;
+      ctx.beginPath();
+      ctx.ellipse(x, y, r * k, r * k * .35, t * .001 * sp + i, 0, 6.28);
+      ctx.stroke();
+    });
+    // core
+    const cg = ctx.createRadialGradient(x, y, 0, x, y, r * 1.1);
+    cg.addColorStop(0, '#ffffff'); cg.addColorStop(.3, '#f4f0ff');
+    cg.addColorStop(.55, '#a8e8ff'); cg.addColorStop(.8, 'rgba(196,60,255,.7)');
+    cg.addColorStop(1, 'rgba(106,44,255,0)');
+    ctx.fillStyle = cg;
+    const pulse = 1 + Math.sin(t * .006) * .06;
+    ctx.beginPath(); ctx.arc(x, y, r * 1.1 * pulse, 0, 6.28); ctx.fill();
+    ctx.restore();
+  }
+
+  // ---------- cutscene state machine ----------
+  // idle -> charge (shake, cracks, energy streams in) -> flash -> reveal
+  let state = 'idle', stateStart = 0, cracks = [], flash = 0, shake = 0;
+
+  function setState(s, now) { state = s; stateStart = now; }
+
+  function startHatch() {
+    if (state !== 'idle') return;
+    hint.style.display = 'none';
+    cracks = [];
+    setState('charge', performance.now());
+  }
+
+  function reset() {
+    again.classList.remove('show');
+    crystals = crystals.filter(c => !c.burst);
+    particles = []; cracks = []; flash = 0;
+    hint.style.display = '';
+    setState('idle', performance.now());
+  }
+
+  canvas.addEventListener('click', startHatch);
+  again.addEventListener('click', reset);
+
+  const CHARGE_MS = 3200;
+
+  function frame(now) {
+    const el = now - stateStart;
+    let energy = 0, glow = .15, squash = 1, eggVisible = true, coreA = 0, zoom = 1;
+
+    if (state === 'idle') {
+      if (Math.random() < .25) sparkle(cx + rand(-R * 1.5, R * 1.5), cy + rand(-R * 1.8, R * 1.5), { kind: 'star', size: rand(1, 2.2), decay: .02 });
+    }
+
+    if (state === 'charge') {
+      const k = Math.min(1, el / CHARGE_MS);
+      energy = k; glow = .15 + k * .85;
+      shake = k * k * 14;
+      squash = 1 + Math.sin(el * .03) * .03 * k;
+      zoom = 1 + k * .15;
+      // cracks appear in stages
+      if (cracks.length < Math.floor(k * 7)) cracks.push(makeCrack());
+      cracks.forEach(c => c.grow = Math.min(1, c.grow + .05));
+      // energy streams pulled in from the edges
+      for (let i = 0; i < 2 + k * 6; i++) {
+        const a = rand(0, 6.28), d = Math.max(W, H) * .6;
+        particles.push({ kind: 'stream', x: cx + Math.cos(a) * d, y: cy + Math.sin(a) * d,
+          vx: 0, vy: 0, life: 1, decay: .01, size: rand(1.5, 3.5), color: pick(PALETTE) });
+      }
+      if (el >= CHARGE_MS) {
+        setState('flash', now);
+        flash = 1;
+        // burst: shell shards, crystal shards, sparkles
+        for (let i = 0; i < 26; i++) {
+          const a = rand(0, 6.28), sp = rand(4, 13);
+          particles.push({ kind: 'shell', x: cx + rand(-R * .5, R * .5), y: cy + rand(-R * .6, R * .6),
+            vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 4, rot: rand(0, 6.28), vr: rand(-.2, .2),
+            life: 1, decay: .008, size: rand(R * .12, R * .28), color: pick(['#6a2cff', '#c43cff', '#ff5fd2', '#5fd8ff']) });
+        }
+        for (let i = 0; i < 14; i++) crystals.push(makeCrystal(true));
+        for (let i = 0; i < 180; i++) {
+          const a = rand(0, 6.28), sp = rand(2, 16);
+          sparkle(cx, cy, { vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, decay: rand(.006, .015), size: rand(1.5, 4) });
+        }
+      }
+    }
+
+    if (state === 'flash') {
+      eggVisible = false;
+      energy = 1; shake = Math.max(0, 16 - el * .03);
+      coreA = Math.min(1, el / 600);
+      zoom = 1.15 - Math.min(.15, el / 4000);
+      if (el > 900) { setState('reveal', now); }
+    }
+
+    if (state === 'reveal') {
+      eggVisible = false; energy = .8; coreA = 1; shake = 0;
+      if (Math.random() < .5) sparkle(cx + rand(-R * 2.5, R * 2.5), cy + rand(-R * 2.5, R * 2.5), { kind: 'star', size: rand(1, 2.5), decay: .015 });
+      if (Math.random() < .8) {
+        const a = rand(0, 6.28);
+        particles.push({ kind: 'flame', x: cx + Math.cos(a) * R * .9, y: cy + Math.sin(a) * R * .9,
+          vx: rand(-.5, .5), vy: rand(-1, 0), life: 1, decay: .015, size: rand(2, 5), color: pick(AURA) });
+      }
+      if (el > 1500) again.classList.add('show');
+    }
+
+    // ---- draw ----
+    ctx.save();
+    ctx.translate(cx, cy); ctx.scale(zoom, zoom); ctx.translate(-cx, -cy);
+    if (shake) ctx.translate(rand(-shake, shake), rand(-shake, shake));
+
+    drawBackground(now, energy);
+    updateCrystals();
+    crystals.forEach(drawCrystal);
+
+    const bob = state === 'idle' ? Math.sin(now * .002) * R * .06 : 0;
+    const tilt = state === 'idle' ? Math.sin(now * .0015) * .05 : 0;
+    if (eggVisible) {
+      drawAura(now, cx, cy + bob, R, energy);
+      ctx.save(); ctx.translate(cx, cy + bob); ctx.rotate(tilt); ctx.translate(-cx, -(cy + bob));
+      drawEgg(now, cx, cy + bob, R, glow, cracks, squash);
+      ctx.restore();
+    } else {
+      drawAura(now, cx, cy, R * .8, energy);
+      drawCore(now, cx, cy, R * .7, coreA);
+    }
+    updateParticles();
+    ctx.restore();
+
+    // white-violet hatch flash
+    if (flash > 0) {
+      const fg = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H));
+      fg.addColorStop(0, `rgba(255,255,255,${flash})`);
+      fg.addColorStop(.5, `rgba(244,240,255,${flash * .9})`);
+      fg.addColorStop(1, `rgba(196,60,255,${flash * .7})`);
+      ctx.fillStyle = fg; ctx.fillRect(0, 0, W, H);
+      flash = Math.max(0, flash - .025);
+    }
+
+    // cinematic letterbox during the cutscene
+    const bars = state === 'idle' ? 0 : Math.min(1, (state === 'charge' ? el : 1000) / 600);
+    if (bars) {
+      ctx.fillStyle = '#000';
+      const bh = H * .09 * bars;
+      ctx.fillRect(0, 0, W, bh); ctx.fillRect(0, H - bh, W, bh);
+    }
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
