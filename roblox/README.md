@@ -3,6 +3,11 @@
 Turns your Rainbow Egg in Roblox Studio into a glowing Ultra Instinct–coloured egg (violet, magenta,
 pink, cyan crystals, silver-white light) with a hatch cutscene when a player finds it.
 
+The cutscene fades the world into a dark Ultra Instinct space void (deep blue-black, a glowing violet
+column, twinkling stars) with violet ki bubbles drifting up and anime speed lines. The egg spins up,
+cracks with silver light, hits two black-and-white impact frames and bursts with shockwave rings and a
+pillar of light into a silver energy core. The camera glides the whole way and eases back to the player.
+
 ## Putting it in your egg
 
 1. In Explorer, find your **Rainbow Egg** (a Part, MeshPart or Model).
