@@ -1,35 +1,38 @@
 # Rainbow egg for the egg hunt
 
-A rainbow egg in the Ultra Instinct colours (violet, magenta, pink, cyan crystals, silver-white light).
-When a player finds it, they get a hatch cutscene: the egg charges up, cracks, flashes and bursts
-into a glowing energy core.
+Turns your Rainbow Egg in Roblox Studio into a glowing Ultra Instinct–coloured egg (violet, magenta,
+pink, cyan crystals, silver-white light) with a hatch cutscene when a player finds it.
 
-## Putting it in Roblox Studio
+## Putting it in your egg
 
-Copy each file's contents into a new script:
+1. In Explorer, find your **Rainbow Egg** (a Part, MeshPart or Model).
+2. Hover over it, click **+**, add a **Script**, and name it `RainbowEgg`.
+   Paste in [`RainbowEgg.server.luau`](RainbowEgg.server.luau).
+3. Hover over that `RainbowEgg` Script, click **+**, add a **LocalScript**, and name it `RainbowEggCutscene`.
+   Paste in [`RainbowEggCutscene.client.luau`](RainbowEggCutscene.client.luau).
 
-| File | Where in Studio | Script type |
-| --- | --- | --- |
-| `shared/RainbowEggConfig.luau` | ReplicatedStorage, named `RainbowEggConfig` | ModuleScript |
-| `server/RainbowEggServer.server.luau` | ServerScriptService | Script |
-| `client/RainbowEggClient.client.luau` | StarterPlayer > StarterPlayerScripts | LocalScript |
+```
+Workspace
+  └ Rainbow Egg
+      └ RainbowEgg              (Script)
+          └ RainbowEggCutscene  (LocalScript)
+```
 
-(With Rojo, `rojo serve roblox/default.project.json` does this for you.)
+Press Play, walk up to the egg and hold **E** to hatch it.
 
-Then put a Part named **`RainbowEggSpawn`** where you want the egg hidden. Add several and one is
-picked at random each server. The spawn Part turns invisible.
+## Settings
+
+The top of the `RainbowEgg` Script has a `SETTINGS` section: cutscene length, the hatch text, whether
+players can find it more than once, and the prompt text.
 
 ## Linking it to your egg hunt
 
 - If players have `leaderstats` with an `Eggs` value, finding the rainbow egg adds 1.
-  Change `LeaderstatName` / `EggValue` in `RainbowEggConfig`.
-- The server also fires `ServerStorage.RainbowEggFound` (a BindableEvent) with the player, so your
-  own egg hunt script can do anything else:
+  Change `LeaderstatName` / `EggValue` in `SETTINGS` to match yours.
+- Your own scripts can react when it's found:
 
   ```lua
-  game.ServerStorage:WaitForChild("RainbowEggFound").Event:Connect(function(player)
+  game.ServerStorage:WaitForChild("RainbowEggFound").Event:Connect(function(player, egg)
       -- give a badge, pet, etc.
   end)
   ```
-
-- Each player can find it once (`OncePerPlayer = true`). After that it disappears for them only.
